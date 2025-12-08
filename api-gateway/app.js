@@ -9,6 +9,7 @@ const graphqlSchema = require('./graphql/schema');
 const graphqlResolver = require('./graphql/resolvers');
 const auth = require('./middleware/auth');
 const { clearImage } = require('./util/file');
+const cors = require('cors');
 
 
 const app = express();
@@ -41,18 +42,7 @@ app.use(
 );
 app.use('/images', express.static(path.join(__dirname, 'images')));
 
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader(
-    'Access-Control-Allow-Methods',
-    'OPTIONS, GET, POST, PUT, PATCH, DELETE'
-  );
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
+app.use(cors());
 
 app.use(auth);
 
@@ -99,7 +89,7 @@ app.use((error, req, res, next) => {
 
 mongoose
   .connect(
-    'mongodb://127.0.0.1:27017/messages'
+    'mongodb://127.0.0.1:27017/social-network-db'
   )
   .then(result => {
     app.listen(8080);

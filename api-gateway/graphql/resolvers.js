@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 
 const User = require('../models/user');
 const Post = require('../models/post');
+const { clearImage } = require('../util/file');
 
 module.exports = {
     createUser: async function ({ userInput }, req) {
@@ -222,7 +223,7 @@ module.exports = {
             throw error;
         }
         clearImage(post.imageUrl);
-        await Post.findByIdAndRemove(id);
+        await Post.findByIdAndDelete(id);
         const user = await User.findById(req.userId);
         user.posts.pull(id);
         await user.save();
