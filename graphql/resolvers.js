@@ -135,5 +135,146 @@ module.exports = {
             }),
             totalPosts: totalPosts
         };
+    },
+    post: async function ({ id }, req) {
+        if (!req.isAuth) {
+            const error = new Error('Not authenticated!');
+            error.code = 401;
+            throw error;
+        }
+        const post = await Post.findById(id).populate('creator');
+        if (!post) {
+            const error = new Error('No post found!');
+            error.code = 404;
+            throw error;
+        }
+        return {
+            ...post._doc,
+            _id: post._id.toString(),
+            createdAt: post.createdAt.toISOString(),
+            updatedAt: post.updatedAt.toISOString()
+        };
+    },
+    updatePost: async function ({ id, postInput }, req) {
+        if (!req.isAuth) {
+            const error = new Error('Not authenticated!');
+            error.code = 401;
+            throw error;
+        }
+        const post = await Post.findById(id).populate('creator');
+        if (!post) {
+            const error = new Error('No post found!');
+            error.code = 404;
+            throw error;
+        }
+        if (post.creator._id.toString() !== req.userId.toString()) {
+            const error = new Error('Not authorized!');
+            error.code = 403;
+            throw error;
+        }
+        const errors = [];
+        if (
+            validator.isEmpty(postInput.title) ||
+            !validator.isLength(postInput.title, { min: 5 })
+        ) {
+            errors.push({ message: 'Title is invalid.' });
+        }
+        if (
+            validator.isEmpty(postInput.content) ||
+            !validator.isLength(postInput.content, { min: 5 })
+        ) {
+            errors.push({ message: 'Content is invalid.' });
+        }
+        if (errors.length > 0) {
+            const error = new Error('Invalid input.');
+            error.data = errors;
+            error.code = 422;
+            throw error;
+        }
+        post.title = postInput.title;
+        post.content = postInput.content;
+        if (postInput.imageUrl !== 'undefined') {
+            post.imageUrl = postInput.imageUrl;
+        }
+        const updatedPost = await post.save();
+        return {
+            ...updatedPost._doc,
+            _id: updatedPost._id.toString(),
+            createdAt: updatedPost.createdAt.toISOString(),
+            updatedAt: updatedPost.updatedAt.toISOString()
+        };
+    },
+    deletePost: async function ({ id }, req) {
+        if (!req.isAuth) {
+            const error = new Error('Not authenticated!');
+            error.code = 401;
+            throw error;
+        }
+        const post = await Post.findById(id);
+        if (!post) {
+            const error = new Error('No post found!');
+            error.code = 404;
+            throw error;
+        }
+        if (post.creator.toString() !== req.userId.toString()) {
+            const error = new Error('Not authorized!');
+            error.code = 403;
+            throw error;
+        }
+        clearImage(post.imageUrl);
+        await Post.findByIdAndRemove(id);
+        const user = await User.findById(req.userId);
+        user.posts.pull(id);
+        await user.save();
+        return true;
+    },
+    user: async function (args, req) {
+        if (!req.isAuth) {
+            const error = new Error('Not authenticated!');
+            error.code = 401;
+            throw error;
+        }
+        // 1. ضفنا populate('posts') عشان يجيب تفاصيل البوستات
+        const user = await User.findById(req.userId).populate('posts');
+
+        if (!user) {
+            const error = new Error('No user found!');
+            error.code = 404;
+            throw error;
+        }
+
+        // 2. لازم ننسق البوستات (Dates & IDs) قبل ما نرجعها
+        return {
+            ...user._doc,
+            _id: user._id.toString(),
+            posts: user.posts.map(p => {
+                return {
+                    ...p._doc,
+                    _id: p._id.toString(),
+                    createdAt: p.createdAt.toISOString(),
+                    updatedAt: p.updatedAt.toISOString(),
+                    // ملحوظة: لو طلبت creator جوه البوستات دي ممكن تحتاج populate أعمق، بس كدة كفاية لطلبك الحالي
+                    creator: user // تحسين صغير: احنا عارفين ان الـ creator هو المستخدم نفسه
+                };
+            })
+        };
+    },
+    updateStatus: async function ({ status }, req) {
+        if (!req.isAuth) {
+            const error = new Error('Not authenticated!');
+            error.code = 401;
+            throw error;
+        }
+        const user = await User.findById(req.userId);
+        if (!user) {
+            const error = new Error('No user found!');
+            error.code = 404;
+            throw error;
+        }
+        user.status = status;
+        await user.save();
+        return { ...user._doc, _id: user._id.toString() };
     }
 };
+
+
