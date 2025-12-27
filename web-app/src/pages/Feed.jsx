@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Plus, ChevronLeft, ChevronRight, Edit2, Trash2 } from 'lucide-react';
 import CreatePostModal from '../components/CreatePostModal';
+import { initSocket, disconnectSocket } from '../lib/socketClient';
 
 const GET_POSTS_QUERY = gql`
   query GetPosts($page: Int) {
@@ -81,6 +82,30 @@ function Feed() {
       refetchPosts();
     },
   });
+
+  // إعداد Socket.IO
+  useEffect(() => {
+    const socket = initSocket();
+
+    socket.on('posts', (data) => {
+      console.log('Socket.IO event received:', data);
+      
+      if (data.action === 'create') {
+        console.log('New post created by another user');
+        refetchPosts();
+      } else if (data.action === 'update') {
+        console.log('Post updated by another user');
+        refetchPosts();
+      } else if (data.action === 'delete') {
+        console.log('Post deleted by another user');
+        refetchPosts();
+      }
+    });
+
+    return () => {
+      disconnectSocket();
+    };
+  }, [refetchPosts]);
 
   const handleLogout = () => {
     logout();

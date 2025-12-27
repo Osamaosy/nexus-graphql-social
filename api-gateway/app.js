@@ -1,5 +1,4 @@
 const path = require('path');
-
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
@@ -11,7 +10,6 @@ const auth = require('./middleware/auth');
 const { clearImage } = require('./util/file');
 const cors = require('cors');
 
-
 const app = express();
 
 const fileStorage = multer.diskStorage({
@@ -19,7 +17,7 @@ const fileStorage = multer.diskStorage({
     cb(null, 'images');
   },
   filename: (req, file, cb) => {
-    cb(null, new Date().toISOString() + '-' + file.originalname);
+    cb(null, new Date().toISOString().replace(/:/g, '-') + '-' + file.originalname);
   }
 });
 
@@ -35,8 +33,7 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// app.use(bodyParser.urlencoded()); // x-www-form-urlencoded <form>
-app.use(bodyParser.json()); // application/json
+app.use(bodyParser.json());
 app.use(
   multer({ storage: fileStorage, fileFilter: fileFilter }).single('image')
 );
@@ -88,10 +85,20 @@ app.use((error, req, res, next) => {
 });
 
 mongoose
-  .connect(
-    'mongodb://127.0.0.1:27017/social-network-db'
-  )
+  .connect('mongodb://127.0.0.1:27017/social-network-db')
   .then(result => {
-    app.listen(8080);
+    const server = app.listen(8080);
+    console.log('Server is running on port 8080');
+    
+    // تشغيل Socket.IO
+    const io = require('./socket').init(server);
+    
+    io.on('connection', socket => {
+      console.log('Client connected:', socket.id);
+      
+      socket.on('disconnect', () => {
+        console.log('Client disconnected:', socket.id);
+      });
+    });
   })
   .catch(err => console.log(err));

@@ -8,7 +8,6 @@ const { clearImage } = require('../util/file');
 
 module.exports = {
     createUser: async function ({ userInput }, req) {
-        //   const email = args.userInput.email;
         const errors = [];
         if (!validator.isEmail(userInput.email)) {
             errors.push({ message: 'E-Mail is invalid.' });
@@ -39,6 +38,7 @@ module.exports = {
         const createdUser = await user.save();
         return { ...createdUser._doc, _id: createdUser._id.toString() };
     },
+
     login: async function ({ email, password }) {
         const user = await User.findOne({ email: email });
         if (!user) {
@@ -62,6 +62,7 @@ module.exports = {
         );
         return { token: token, userId: user._id.toString() };
     },
+
     createPost: async function ({ postInput }, req) {
         if (!req.isAuth) {
             const error = new Error('Not authenticated!');
@@ -102,6 +103,27 @@ module.exports = {
         const createdPost = await post.save();
         user.posts.push(createdPost);
         await user.save();
+
+        // إرسال تحديث فوري عبر Socket.IO
+        try {
+            const io = require('../socket').getIO();
+            io.emit('posts', {
+                action: 'create',
+                post: {
+                    ...createdPost._doc,
+                    _id: createdPost._id.toString(),
+                    createdAt: createdPost.createdAt.toISOString(),
+                    updatedAt: createdPost.updatedAt.toISOString(),
+                    creator: {
+                        _id: user._id.toString(),
+                        name: user.name
+                    }
+                }
+            });
+        } catch (err) {
+            console.log('Socket.IO error:', err);
+        }
+
         return {
             ...createdPost._doc,
             _id: createdPost._id.toString(),
@@ -109,6 +131,7 @@ module.exports = {
             updatedAt: createdPost.updatedAt.toISOString()
         };
     },
+
     posts: async function ({ page }, req) {
         if (!req.isAuth) {
             const error = new Error('Not authenticated!');
@@ -137,6 +160,7 @@ module.exports = {
             totalPosts: totalPosts
         };
     },
+
     post: async function ({ id }, req) {
         if (!req.isAuth) {
             const error = new Error('Not authenticated!');
@@ -156,6 +180,7 @@ module.exports = {
             updatedAt: post.updatedAt.toISOString()
         };
     },
+
     updatePost: async function ({ id, postInput }, req) {
         if (!req.isAuth) {
             const error = new Error('Not authenticated!');
@@ -198,6 +223,27 @@ module.exports = {
             post.imageUrl = postInput.imageUrl;
         }
         const updatedPost = await post.save();
+
+        // إرسال تحديث فوري عبر Socket.IO
+        try {
+            const io = require('../socket').getIO();
+            io.emit('posts', {
+                action: 'update',
+                post: {
+                    ...updatedPost._doc,
+                    _id: updatedPost._id.toString(),
+                    createdAt: updatedPost.createdAt.toISOString(),
+                    updatedAt: updatedPost.updatedAt.toISOString(),
+                    creator: {
+                        _id: post.creator._id.toString(),
+                        name: post.creator.name
+                    }
+                }
+            });
+        } catch (err) {
+            console.log('Socket.IO error:', err);
+        }
+
         return {
             ...updatedPost._doc,
             _id: updatedPost._id.toString(),
@@ -205,6 +251,7 @@ module.exports = {
             updatedAt: updatedPost.updatedAt.toISOString()
         };
     },
+
     deletePost: async function ({ id }, req) {
         if (!req.isAuth) {
             const error = new Error('Not authenticated!');
@@ -227,15 +274,27 @@ module.exports = {
         const user = await User.findById(req.userId);
         user.posts.pull(id);
         await user.save();
+
+        // إرسال تحديث فوري عبر Socket.IO
+        try {
+            const io = require('../socket').getIO();
+            io.emit('posts', {
+                action: 'delete',
+                postId: id
+            });
+        } catch (err) {
+            console.log('Socket.IO error:', err);
+        }
+
         return true;
     },
+
     user: async function (args, req) {
         if (!req.isAuth) {
             const error = new Error('Not authenticated!');
             error.code = 401;
             throw error;
         }
-        // 1. ضفنا populate('posts') عشان يجيب تفاصيل البوستات
         const user = await User.findById(req.userId).populate('posts');
 
         if (!user) {
@@ -244,7 +303,6 @@ module.exports = {
             throw error;
         }
 
-        // 2. لازم ننسق البوستات (Dates & IDs) قبل ما نرجعها
         return {
             ...user._doc,
             _id: user._id.toString(),
@@ -254,12 +312,12 @@ module.exports = {
                     _id: p._id.toString(),
                     createdAt: p.createdAt.toISOString(),
                     updatedAt: p.updatedAt.toISOString(),
-                    // ملحوظة: لو طلبت creator جوه البوستات دي ممكن تحتاج populate أعمق، بس كدة كفاية لطلبك الحالي
-                    creator: user // تحسين صغير: احنا عارفين ان الـ creator هو المستخدم نفسه
+                    creator: user
                 };
             })
         };
     },
+
     updateStatus: async function ({ status }, req) {
         if (!req.isAuth) {
             const error = new Error('Not authenticated!');
@@ -277,5 +335,3 @@ module.exports = {
         return { ...user._doc, _id: user._id.toString() };
     }
 };
-
-
